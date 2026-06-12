@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>田園都市線 音声案内</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      background: #0f1923;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 16px 40px;
+    }
+
+    .header {
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      padding: 36px 0 20px;
+    }
+    .header .line-badge {
+      display: inline-block;
+      background: #009944;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+    .header .route { margin-top: 6px; font-size: 13px; color: #8ecf9e; }
+
+    .clock-card {
+      width: 100%;
+      max-width: 400px;
+      background: #1a2634;
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .clock-card .label { font-size: 12px; color: #7a8fa0; }
+    .clock-card .time  { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .clock-card .date  { font-size: 12px; color: #7a8fa0; text-align: right; }
+
+    .mic-section {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 8px 0 20px;
+    }
+    .mic-btn {
+      width: 88px; height: 88px;
+      border-radius: 50%;
+      border: none;
+      background: #009944;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 24px rgba(0,153,68,0.45);
+      transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mic-btn:active { transform: scale(0.94); }
+    .mic-btn.listening {
+      background: #d0021b;
+      box-shadow: 0 4px 24px rgba(208,2,27,0.5);
+      animation: pulse 1.2s infinite;
+    }
+    .mic-btn.speaking {
+      background: #1a6fc4;
+      box-shadow: 0 4px 24px rgba(26,111,196,0.5);
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 4px 24px rgba(208,2,27,0.5); }
+      50%      { box-shadow: 0 4px 40px rgba(208,2,27,0.8); }
+    }
+    .mic-btn svg { width: 36px; height: 36px; fill: #fff; }
+    .mic-hint { margin-top: 12px; font-size: 13px; color: #7a8fa0; text-align: center; min-height: 20px; }
+
+    .transcript-box {
+      width: 100%;
+      max-width: 400px;
+      background: #1a2634;
+      border-radius: 12px;
+      padding: 12px 16px;
+      min-height: 52px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #c0cdd8;
+      line-height: 1.5;
+      display: none;
+    }
+    .transcript-box.visible { display: block; }
+    .transcript-box .t-label { font-size: 11px; color: #7a8fa0; margin-bottom: 4px; }
+
+    .result-card {
+      width: 100%;
+      max-width: 400px;
+      background: #1a2634;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      display: none;
+      border-left: 4px solid #009944;
+    }
+    .result-card.visible { display: block; }
+    .result-card.error { border-left-color: #d0021b; }
+    .result-card .r-label { font-size: 11px; color: #7a8fa0; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .result-card .r-time { font-size: 48px; font-weight: 800; font-variant-numeric: tabular-nums; color: #5dde8a; line-height: 1; }
+    .result-card .r-time .r-unit { font-size: 18px; font-weight: 400; margin-left: 4px; }
+    .result-card .r-sub { margin-top: 10px; font-size: 13px; color: #7a8fa0; line-height: 1.6; }
+    .result-card .r-tag { display: inline-block; font-size: 11px; background: #009944; color: #fff; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+    .result-card .r-error-text { font-size: 15px; color: #f47a7a; line-height: 1.5; }
+
+    .example-section { width: 100%; max-width: 400px; }
+    .example-section h3 { font-size: 12px; color: #7a8fa0; margin-bottom: 8px; letter-spacing: 0.06em; }
+    .example-btn {
+      width: 100%;
+      background: #1a2634;
+      border: 1px solid #2a3a4a;
+      border-radius: 10px;
+      color: #c0cdd8;
+      font-size: 13px;
+      padding: 11px 14px;
+      text-align: left;
+      cursor: pointer;
+      margin-bottom: 8px;
+      line-height: 1.45;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    .example-btn:active { background: #243344; }
+
+    .notice { width: 100%; max-width: 400px; font-size: 11px; color: #4a5a6a; margin-top: 16px; line-height: 1.6; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="line-badge">田園都市線</div>
+  <h1>音声乗換案内</h1>
+  <div class="route">溝の口 → 渋谷</div>
+</div>
+
+<div class="clock-card">
+  <div>
+    <div class="label">現在時刻</div>
+    <div class="time" id="clockTime">--:--</div>
+  </div>
+  <div class="date" id="clockDate">---</div>
+</div>
+
+<div class="mic-section">
+  <button class="mic-btn" id="micBtn" onclick="handleMicClick()">
+    <svg viewBox="0 0 24 24"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-1 16.93V20H9v2h6v-2h-2v-2.07A8.001 8.001 0 0 0 20 11h-2a6 6 0 0 1-12 0H4a8.001 8.001 0 0 0 7 7.93z"/></svg>
+  </button>
+  <div class="mic-hint" id="micHint">タップして話す</div>
+</div>
+
+<div class="transcript-box" id="transcriptBox">
+  <div class="t-label">認識した音声</div>
+  <div id="transcriptText"></div>
+</div>
+
+<div class="result-card" id="resultCard">
+  <div class="r-label">最速の出発時刻</div>
+  <div class="r-time" id="resultTime">--:--</div>
+  <div class="r-sub" id="resultSub"></div>
+</div>
+
+<div class="example-section">
+  <h3>例文（タップで試す）</h3>
+  <button class="example-btn" onclick="simulateVoice('いまから7分後に溝の口駅へ着くので、溝の口駅から渋谷へ行く一番早い田園都市線の出発時刻を教えて')">
+    「いまから7分後に溝の口駅へ着くので、溝の口から渋谷の一番早い出発時刻を教えて」
+  </button>
+  <button class="example-btn" onclick="simulateVoice('8分後に溝の口に着きます。渋谷行きの次の電車は何時ですか')">
+    「8分後に溝の口に着きます。渋谷行きの次の電車は何時ですか」
+  </button>
+  <button class="example-btn" onclick="simulateVoice('溝の口から渋谷、次の電車')">
+    「溝の口から渋谷、次の電車」（すぐ乗れる場合）
+  </button>
+</div>
+
+<div class="notice">
+  ※ダイヤは参考値です。正確な時刻は東急電鉄公式サイトでご確認ください。<br>
+  ※音声認識にはiOS Safariの許可が必要です。
+</div>
+
+<script>
+const SCHEDULE = generateSchedule();
+
+function generateSchedule() {
+  const trains = [];
+  const dayMinutes = 24 * 60;
+  const patterns = [
+    { from: 5*60,  to: 6*60,  interval: 12, types: ['各停'], duration: 22 },
+    { from: 6*60,  to: 7*60,  interval: 6,  types: ['各停','急行'], duration: 20 },
+    { from: 7*60,  to: 9*60,  interval: 3,  types: ['各停','準急','急行'], duration: 18 },
+    { from: 9*60,  to: 11*60, interval: 5,  types: ['急行','各停'], duration: 19 },
+    { from: 11*60, to: 16*60, interval: 6,  types: ['急行','各停'], duration: 20 },
+    { from: 16*60, to: 19*60, interval: 4,  types: ['急行','準急','各停'], duration: 18 },
+    { from: 19*60, to: 22*60, interval: 5,  types: ['急行','各停'], duration: 19 },
+    { from: 22*60, to: 24*60, interval: 8,  types: ['各停'], duration: 22 },
+    { from: 24*60, to: 25*60, interval: 12, types: ['各停'], duration: 23 },
+  ];
+  patterns.forEach(p => {
+    let t = p.from, ti = 0;
+    while (t < p.to) {
+      trains.push({ depMin: t % dayMinutes, type: p.types[ti % p.types.length], durMin: p.duration });
+      t += p.interval; ti++;
+    }
+  });
+  trains.sort((a, b) => a.depMin - b.depMin);
+  return trains;
+}
+
+function formatMin(totalMin) {
+  return `${String(Math.floor(totalMin/60)).padStart(2,'0')}:${String(totalMin%60).padStart(2,'0')}`;
+}
+
+function nowMin() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function findNextTrain(targetMin) {
+  const normalized = targetMin % (24 * 60);
+  for (const t of SCHEDULE) if (t.depMin >= normalized) return t;
+  return SCHEDULE[0];
+}
+
+function extractMinutesLater(text) {
+  const kanjiMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'十二':12,'十三':13,'十四':14,'十五':15};
+  let m = text.match(/(\d+)\s*分\s*後/);
+  if (m) return parseInt(m[1]);
+  for (const [kanji, val] of Object.entries(kanjiMap)) {
+    if (text.includes(kanji + '分後')) return val;
+  }
+  if (/すぐ|今すぐ/.test(text)) return 0;
+  if (/溝の口/.test(text) && /渋谷/.test(text)) return 0;
+  return null;
+}
+
+function processQuery(text) {
+  showTranscript(text);
+  const minutesLater = extractMinutesLater(text);
+  if (minutesLater === null) {
+    showError('「○分後に溝の口に着く」や「渋谷行きの次の電車」のようにお話しください。');
+    speak('すみません、もう少し具体的にお話しください。例えば、7分後に溝の口に着くので渋谷行きを教えて、のようにどうぞ。');
+    return;
+  }
+  const arrivalMin = nowMin() + minutesLater;
+  const train = findNextTrain(arrivalMin);
+  const arrivalAtShibuya = train.depMin + train.durMin;
+  const depStr = formatMin(train.depMin);
+  const arrStr = formatMin(arrivalAtShibuya);
+  const waitMin = train.depMin - arrivalMin;
+  showResult(train, depStr, arrStr, minutesLater, waitMin);
+  const h = Math.floor(train.depMin / 60);
+  const m = train.depMin % 60;
+  let msg = minutesLater > 0 ? `${minutesLater}分後に溝の口へ到着後、` : '';
+  msg += `溝の口発${h}時${m > 0 ? m + '分' : ''}の${train.type}に乗れます。渋谷には${Math.floor(arrivalAtShibuya/60)}時${arrivalAtShibuya%60 > 0 ? arrivalAtShibuya%60 + '分' : ''}頃に到着します。`;
+  speak(msg);
+}
+
+function showTranscript(text) {
+  document.getElementById('transcriptText').textContent = text;
+  document.getElementById('transcriptBox').classList.add('visible');
+}
+
+function showResult(train, depStr, arrStr, minutesLater, waitMin) {
+  const card = document.getElementById('resultCard');
+  card.classList.remove('error');
+  card.classList.add('visible');
+  card.style.borderLeftColor = '#009944';
+  document.getElementById('resultTime').innerHTML = `${depStr}<span class="r-unit">発</span>`;
+  const waitLabel = waitMin <= 0 ? '（ちょうど間に合います）' : `（到着後 ${waitMin}分待ち）`;
+  document.getElementById('resultSub').innerHTML =
+    `種別：${train.type} <span class="r-tag">${train.type}</span><br>` +
+    `渋谷到着予定：${arrStr} 頃<br>` +
+    `<span style="color:#5dde8a">${waitLabel}</span>`;
+}
+
+function showError(msg) {
+  const card = document.getElementById('resultCard');
+  card.classList.add('visible', 'error');
+  card.style.borderLeftColor = '#d0021b';
+  document.getElementById('resultTime').innerHTML = '<span style="font-size:20px">⚠</span>';
+  document.getElementById('resultSub').innerHTML = `<span class="r-error-text">${msg}</span>`;
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'ja-JP';
+  utt.rate = 1.0;
+  const micBtn = document.getElementById('micBtn');
+  utt.onstart = () => { micBtn.classList.add('speaking'); setHint('読み上げ中...'); };
+  utt.onend   = () => { micBtn.classList.remove('speaking'); setHint('タップして話す'); };
+  window.speechSynthesis.speak(utt);
+}
+
+let recognition = null;
+
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'ja-JP';
+  r.continuous = false;
+  r.interimResults = true;
+  const micBtn = document.getElementById('micBtn');
+  r.onstart  = () => { micBtn.classList.add('listening'); setHint('聞いています...'); };
+  r.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t; else interim += t;
+    }
+    showTranscript(final || interim);
+    if (final) processQuery(final);
+  };
+  r.onerror = (e) => {
+    micBtn.classList.remove('listening');
+    const msgs = {
+      'not-allowed': 'マイクへのアクセスが拒否されました。Safariの設定で許可してください。',
+      'no-speech':   '音声が検出されませんでした。もう一度お試しください。',
+      'network':     'ネットワークエラーが発生しました。'
+    };
+    setHint(msgs[e.error] || 'エラー。再度タップしてください。');
+    showError(msgs[e.error] || 'エラー: ' + e.error);
+  };
+  r.onend = () => {
+    micBtn.classList.remove('listening');
+    if (!document.getElementById('resultCard').classList.contains('visible')) setHint('タップして話す');
+  };
+  return r;
+}
+
+function handleMicClick() {
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    document.getElementById('micBtn').classList.remove('speaking');
+    setHint('タップして話す');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showError('このブラウザは音声認識に対応していません。Safari (iOS) をお使いください。'); return; }
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  recognition = initRecognition();
+  if (recognition) {
+    document.getElementById('resultCard').classList.remove('visible');
+    document.getElementById('transcriptBox').classList.remove('visible');
+    recognition.start();
+  }
+}
+
+function simulateVoice(text) {
+  document.getElementById('resultCard').classList.remove('visible');
+  document.getElementById('transcriptBox').classList.remove('visible');
+  setTimeout(() => processQuery(text), 100);
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockTime').textContent =
+    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const days = ['日','月','火','水','木','金','土'];
+  document.getElementById('clockDate').textContent =
+    `${now.getMonth()+1}月${now.getDate()}日（${days[now.getDay()]}）`;
+}
+
+function setHint(t) { document.getElementById('micHint').textContent = t; }
+
+updateClock();
+setInterval(updateClock, 1000);
+
+document.addEventListener('touchstart', function warmup() {
+  if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  document.removeEventListener('touchstart', warmup);
+}, { once: true });
+</script>
+</body>
+</html>
