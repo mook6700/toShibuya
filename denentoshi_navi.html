@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -337,6 +338,12 @@ function initRecognition() {
   };
   r.onerror = (e) => {
     micBtn.classList.remove('listening');
+    // abortedはiOS Safariが一時的に中断しただけ → 自動リトライ
+    if (e.error === 'aborted') {
+      setHint('タップして話す');
+      setTimeout(() => startRecognition(), 400);
+      return;
+    }
     const msgs = {
       'not-allowed': 'マイクへのアクセスが拒否されました。Safariの設定で許可してください。',
       'no-speech':   '音声が検出されませんでした。もう一度お試しください。',
@@ -352,13 +359,7 @@ function initRecognition() {
   return r;
 }
 
-function handleMicClick() {
-  if (window.speechSynthesis && window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-    document.getElementById('micBtn').classList.remove('speaking');
-    setHint('タップして話す');
-    return;
-  }
+function startRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showError('このブラウザは音声認識に対応していません。Safari (iOS) をお使いください。'); return; }
   if (recognition) { try { recognition.stop(); } catch(e) {} }
@@ -366,8 +367,21 @@ function handleMicClick() {
   if (recognition) {
     document.getElementById('resultCard').classList.remove('visible');
     document.getElementById('transcriptBox').classList.remove('visible');
-    recognition.start();
+    // 少し待ってから開始（iOS Safariの準備を待つ）
+    setTimeout(() => { try { recognition.start(); } catch(e) {} }, 150);
   }
+}
+
+function handleMicClick() {
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    document.getElementById('micBtn').classList.remove('speaking');
+    setHint('タップして話す');
+    // TTSが止まってから認識開始
+    setTimeout(() => startRecognition(), 400);
+    return;
+  }
+  startRecognition();
 }
 
 function simulateVoice(text) {
