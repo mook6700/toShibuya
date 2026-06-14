@@ -147,6 +147,21 @@
     .example-btn:active { background: #243344; }
 
     .notice { width: 100%; max-width: 400px; font-size: 11px; color: #4a5a6a; margin-top: 16px; line-height: 1.6; text-align: center; }
+
+    .day-toggle {
+      width: 100%; max-width: 400px;
+      margin-bottom: 12px;
+      display: flex; justify-content: center;
+    }
+    .day-toggle button {
+      font-size: 13px; font-weight: 700;
+      padding: 8px 24px;
+      border: none; border-radius: 20px;
+      color: #8ecf9e; cursor: pointer;
+      background: #1a3a2a;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
   </style>
 </head>
 <body>
@@ -154,7 +169,7 @@
 <div class="header">
   <div class="line-badge">田園都市線</div>
   <h1>音声乗換案内</h1>
-  <div class="route">溝の口 → 渋谷</div>
+  <div class="route" id="routeLabel">溝の口 → 渋谷</div>
 </div>
 
 <div class="clock-card">
@@ -163,6 +178,10 @@
     <div class="time" id="clockTime">--:--</div>
   </div>
   <div class="date" id="clockDate">---</div>
+</div>
+
+<div class="day-toggle">
+  <button id="dayToggle" onclick="toggleDayType()">📅 平日ダイヤ</button>
 </div>
 
 <div class="mic-section">
@@ -185,14 +204,17 @@
 
 <div class="example-section">
   <h3>例文（タップで試す）</h3>
-  <button class="example-btn" onclick="simulateVoice('いまから7分後に溝の口駅へ着くので、溝の口駅から渋谷へ行く一番早い田園都市線の出発時刻を教えて')">
-    「いまから7分後に溝の口駅へ着くので、溝の口から渋谷の一番早い出発時刻を教えて」
+  <button class="example-btn" onclick="simulateVoice('10分後に溝の口に着きます。渋谷行きの次の電車は何時ですか')">
+    「10分後に溝の口に着きます。渋谷行きの次の電車は？」
   </button>
   <button class="example-btn" onclick="simulateVoice('8分後に溝の口に着きます。渋谷行きの次の電車は何時ですか')">
-    「8分後に溝の口に着きます。渋谷行きの次の電車は何時ですか」
+    「8分後に溝の口に着きます。渋谷行きの次の電車は？」
   </button>
-  <button class="example-btn" onclick="simulateVoice('溝の口から渋谷、次の電車')">
-    「溝の口から渋谷、次の電車」（すぐ乗れる場合）
+  <button class="example-btn" onclick="simulateVoice('5分後に溝の口に着きます。渋谷行きの次の電車は何時ですか')">
+    「5分後に溝の口に着きます。渋谷行きの次の電車は？」
+  </button>
+  <button class="example-btn" onclick="simulateVoice('今すぐ溝の口から渋谷行き')">
+    「今すぐ溝の口から渋谷行き」
   </button>
 </div>
 
@@ -202,57 +224,122 @@
 </div>
 
 <script>
-const SCHEDULE = generateSchedule();
+/* ── 行き先マスター ── */
+const DEST = {
+  shibuya:        { name:'渋谷',       dir:'fwd', durExpress:18, durLocal:22 },
+  sangenjaya:     { name:'三軒茶屋',   dir:'fwd', durExpress:11, durLocal:20 },
+  futakotamagawa: { name:'二子玉川',   dir:'fwd', durExpress:4,  durLocal:5  },
+  futakoshinchi:  { name:'二子新地',   dir:'fwd', durExpress:null, durLocal:3, localOnly:true },
+  tamaplaza:      { name:'たまプラーザ', dir:'rev', durExpress:8,  durLocal:10 },
+  azamino:        { name:'あざみ野',   dir:'rev', durExpress:11, durLocal:14 },
+};
 
-function generateSchedule() {
+/* ── 平日：渋谷方面（溝の口発） ── */
+const SCHEDULE_FWD = buildSchedule([
+  { from:5*60,  to:6*60,  interval:12, types:['各停']             },
+  { from:6*60,  to:7*60,  interval:6,  types:['各停','急行']      },
+  { from:7*60,  to:9*60,  interval:3,  types:['各停','準急','急行']},
+  { from:9*60,  to:11*60, interval:5,  types:['急行','各停']      },
+  { from:11*60, to:16*60, interval:6,  types:['急行','各停']      },
+  { from:16*60, to:19*60, interval:4,  types:['急行','準急','各停']},
+  { from:19*60, to:22*60, interval:5,  types:['急行','各停']      },
+  { from:22*60, to:24*60, interval:8,  types:['各停']             },
+  { from:24*60, to:25*60, interval:12, types:['各停']             },
+]);
+
+/* ── 平日：中央林間方面（溝の口発）── */
+const SCHEDULE_REV = buildSchedule([
+  { from:5*60+3,  to:6*60+3,  interval:12, types:['各停']             },
+  { from:6*60+3,  to:7*60+3,  interval:6,  types:['各停','急行']      },
+  { from:7*60+3,  to:9*60+3,  interval:3,  types:['各停','準急','急行']},
+  { from:9*60+3,  to:11*60+3, interval:5,  types:['急行','各停']      },
+  { from:11*60+3, to:16*60+3, interval:6,  types:['急行','各停']      },
+  { from:16*60+3, to:19*60+3, interval:4,  types:['急行','準急','各停']},
+  { from:19*60+3, to:22*60+3, interval:5,  types:['急行','各停']      },
+  { from:22*60+3, to:24*60+3, interval:8,  types:['各停']             },
+  { from:24*60+3, to:25*60+3, interval:12, types:['各停']             },
+]);
+
+/* ── 土休日：渋谷方面（溝の口発） ── */
+const SCHEDULE_FWD_HOL = buildSchedule([
+  { from:5*60,  to:6*60,  interval:12, types:['各停']        },
+  { from:6*60,  to:8*60,  interval:8,  types:['各停','急行'] },
+  { from:8*60,  to:11*60, interval:6,  types:['急行','各停'] },
+  { from:11*60, to:17*60, interval:5,  types:['急行','各停'] },
+  { from:17*60, to:20*60, interval:6,  types:['急行','各停'] },
+  { from:20*60, to:22*60, interval:7,  types:['急行','各停'] },
+  { from:22*60, to:24*60, interval:8,  types:['各停']        },
+  { from:24*60, to:25*60, interval:12, types:['各停']        },
+]);
+
+/* ── 土休日：中央林間方面（溝の口発） ── */
+const SCHEDULE_REV_HOL = buildSchedule([
+  { from:5*60+3,  to:6*60+3,  interval:12, types:['各停']        },
+  { from:6*60+3,  to:8*60+3,  interval:8,  types:['各停','急行'] },
+  { from:8*60+3,  to:11*60+3, interval:6,  types:['急行','各停'] },
+  { from:11*60+3, to:17*60+3, interval:5,  types:['急行','各停'] },
+  { from:17*60+3, to:20*60+3, interval:6,  types:['急行','各停'] },
+  { from:20*60+3, to:22*60+3, interval:7,  types:['急行','各停'] },
+  { from:22*60+3, to:24*60+3, interval:8,  types:['各停']        },
+  { from:24*60+3, to:25*60+3, interval:12, types:['各停']        },
+]);
+
+/* ── 曜日判定 ── */
+let dayType = (new Date().getDay() === 0 || new Date().getDay() === 6) ? 'hol' : 'wday';
+
+function toggleDayType() {
+  dayType = dayType === 'wday' ? 'hol' : 'wday';
+  updateDayToggle();
+}
+function updateDayToggle() {
+  const btn = document.getElementById('dayToggle');
+  if (!btn) return;
+  btn.textContent = dayType === 'wday' ? '📅 平日ダイヤ' : '🏖 土休日ダイヤ';
+  btn.style.background = dayType === 'wday' ? '#1a3a2a' : '#3a2a1a';
+}
+
+function buildSchedule(patterns) {
   const trains = [];
-  const dayMinutes = 24 * 60;
-  const patterns = [
-    { from: 5*60,  to: 6*60,  interval: 12, types: ['各停'], duration: 22 },
-    { from: 6*60,  to: 7*60,  interval: 6,  types: ['各停','急行'], duration: 20 },
-    { from: 7*60,  to: 9*60,  interval: 3,  types: ['各停','準急','急行'], duration: 18 },
-    { from: 9*60,  to: 11*60, interval: 5,  types: ['急行','各停'], duration: 19 },
-    { from: 11*60, to: 16*60, interval: 6,  types: ['急行','各停'], duration: 20 },
-    { from: 16*60, to: 19*60, interval: 4,  types: ['急行','準急','各停'], duration: 18 },
-    { from: 19*60, to: 22*60, interval: 5,  types: ['急行','各停'], duration: 19 },
-    { from: 22*60, to: 24*60, interval: 8,  types: ['各停'], duration: 22 },
-    { from: 24*60, to: 25*60, interval: 12, types: ['各停'], duration: 23 },
-  ];
   patterns.forEach(p => {
     let t = p.from, ti = 0;
     while (t < p.to) {
-      trains.push({ depMin: t % dayMinutes, type: p.types[ti % p.types.length], durMin: p.duration });
+      trains.push({ depMin: t % (24*60), type: p.types[ti % p.types.length] });
       t += p.interval; ti++;
     }
   });
-  trains.sort((a, b) => a.depMin - b.depMin);
-  return trains;
+  return trains.sort((a,b) => a.depMin - b.depMin);
 }
 
-function formatMin(totalMin) {
-  return `${String(Math.floor(totalMin/60)).padStart(2,'0')}:${String(totalMin%60).padStart(2,'0')}`;
+function formatMin(m) {
+  return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+}
+function nowMin() { const n=new Date(); return n.getHours()*60+n.getMinutes(); }
+
+function findNextTrain(targetMin, schedule, localOnly) {
+  const norm = targetMin % (24*60);
+  const list = localOnly ? schedule.filter(t => t.type==='各停') : schedule;
+  for (const t of list) if (t.depMin >= norm) return t;
+  return list[0];
 }
 
-function nowMin() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
-}
-
-function findNextTrain(targetMin) {
-  const normalized = targetMin % (24 * 60);
-  for (const t of SCHEDULE) if (t.depMin >= normalized) return t;
-  return SCHEDULE[0];
+/* ── 行き先を音声テキストから判定 ── */
+function extractDest(text) {
+  if (/三軒茶屋|さんげんじゃや|三茶/.test(text))           return 'sangenjaya';
+  if (/二子新地|ふたこしんち/.test(text))                   return 'futakoshinchi';
+  if (/二子玉川|ふたこたまがわ|二子玉/.test(text))         return 'futakotamagawa';
+  if (/たまプラーザ|たまぷらーざ|玉川学園/.test(text))    return 'tamaplaza';
+  if (/あざみ野|あざみの/.test(text))                       return 'azamino';
+  if (/渋谷|しぶや/.test(text))                             return 'shibuya';
+  return 'shibuya'; // デフォルト
 }
 
 function extractMinutesLater(text) {
   const kanjiMap = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'十二':12,'十三':13,'十四':14,'十五':15};
   let m = text.match(/(\d+)\s*分\s*後/);
   if (m) return parseInt(m[1]);
-  for (const [kanji, val] of Object.entries(kanjiMap)) {
-    if (text.includes(kanji + '分後')) return val;
-  }
+  for (const [k,v] of Object.entries(kanjiMap)) if (text.includes(k+'分後')) return v;
   if (/すぐ|今すぐ/.test(text)) return 0;
-  if (/溝の口/.test(text) && /渋谷/.test(text)) return 0;
+  if (/溝の口/.test(text)) return 0;
   return null;
 }
 
@@ -260,21 +347,30 @@ function processQuery(text) {
   showTranscript(text);
   const minutesLater = extractMinutesLater(text);
   if (minutesLater === null) {
-    showError('「○分後に溝の口に着く」や「渋谷行きの次の電車」のようにお話しください。');
+    showError('「○分後に溝の口に着く」や行き先（渋谷・三軒茶屋・二子玉川など）をお話しください。');
     speak('すみません、もう少し具体的にお話しください。例えば、7分後に溝の口に着くので渋谷行きを教えて、のようにどうぞ。');
     return;
   }
+  const destKey = extractDest(text);
+  const dest    = DEST[destKey];
+  const schedule = dest.dir === 'fwd'
+    ? (dayType === 'wday' ? SCHEDULE_FWD : SCHEDULE_FWD_HOL)
+    : (dayType === 'wday' ? SCHEDULE_REV : SCHEDULE_REV_HOL);
   const arrivalMin = nowMin() + minutesLater;
-  const train = findNextTrain(arrivalMin);
-  const arrivalAtShibuya = train.depMin + train.durMin;
-  const depStr = formatMin(train.depMin);
-  const arrStr = formatMin(arrivalAtShibuya);
+  const train = findNextTrain(arrivalMin, schedule, dest.localOnly);
+
+  // 所要時間（急行/準急は速い、各停は遅い）
+  const isExpress = train.type === '急行' || train.type === '準急';
+  const dur = isExpress && dest.durExpress ? dest.durExpress : dest.durLocal;
+  const arrivalAtDest = train.depMin + dur;
   const waitMin = train.depMin - arrivalMin;
-  showResult(train, depStr, arrStr, minutesLater, waitMin);
-  const h = Math.floor(train.depMin / 60);
-  const m = train.depMin % 60;
+
+  document.getElementById('routeLabel').textContent = `溝の口 → ${dest.name}`;
+  showResult(train, formatMin(train.depMin), formatMin(arrivalAtDest), waitMin, dest.name);
+
+  const h = Math.floor(train.depMin/60), mn = train.depMin%60;
   let msg = minutesLater > 0 ? `${minutesLater}分後に溝の口へ到着後、` : '';
-  msg += `溝の口発${h}時${m > 0 ? m + '分' : ''}の${train.type}に乗れます。渋谷には${Math.floor(arrivalAtShibuya/60)}時${arrivalAtShibuya%60 > 0 ? arrivalAtShibuya%60 + '分' : ''}頃に到着します。`;
+  msg += `溝の口発${h}時${mn>0?mn+'分':''}の${train.type}に乗れます。${dest.name}には${Math.floor(arrivalAtDest/60)}時${arrivalAtDest%60>0?arrivalAtDest%60+'分':''}頃に到着します。`;
   speak(msg);
 }
 
@@ -283,7 +379,7 @@ function showTranscript(text) {
   document.getElementById('transcriptBox').classList.add('visible');
 }
 
-function showResult(train, depStr, arrStr, minutesLater, waitMin) {
+function showResult(train, depStr, arrStr, waitMin, destName) {
   const card = document.getElementById('resultCard');
   card.classList.remove('error');
   card.classList.add('visible');
@@ -292,7 +388,7 @@ function showResult(train, depStr, arrStr, minutesLater, waitMin) {
   const waitLabel = waitMin <= 0 ? '（ちょうど間に合います）' : `（到着後 ${waitMin}分待ち）`;
   document.getElementById('resultSub').innerHTML =
     `種別：${train.type} <span class="r-tag">${train.type}</span><br>` +
-    `渋谷到着予定：${arrStr} 頃<br>` +
+    `${destName}到着予定：${arrStr} 頃<br>` +
     `<span style="color:#5dde8a">${waitLabel}</span>`;
 }
 
@@ -403,6 +499,7 @@ function setHint(t) { document.getElementById('micHint').textContent = t; }
 
 updateClock();
 setInterval(updateClock, 1000);
+updateDayToggle();
 
 document.addEventListener('touchstart', function warmup() {
   if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
